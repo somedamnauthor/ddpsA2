@@ -34,8 +34,8 @@ class FileHandler(object):
         file_split.write(str(index) + "\n")
         return file_split
 
-
-    def is_on_split_position(self, character, index, split_size, current_split):
+ 
+     def is_on_split_position(self, character, index, split_size, current_split):
         """Check if it is the right time to split.
         i.e: character is a space and the limit has been reached.
 
@@ -78,7 +78,7 @@ class FileHandler(object):
         single output file.
 
         :param number_of_files: total number of files.
-        :param clean: if True the reduce outputs will be deleted,
+         :param clean: if True the reduce outputs will be deleted,
         by default takes the value of self.clean.
         :param sort: sort the outputs.
         :param decreasing: sort by decreasing order, high value
@@ -233,7 +233,7 @@ class MapReduce(object):
         for thread_id in range(self.n_reducers):
             p = Process(target=self.run_reducer, args=(thread_id,))
             p.start()
-            rdc_workers.append(p)
+            map_workers.append(p)
         [t.join() for t in rdc_workers]
         if join:
             self.join_outputs()
