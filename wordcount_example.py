@@ -38,25 +38,34 @@ class WordCount(MapReduce):
 
 
 if __name__ == '__main__':
-  if (len(sys.argv) != 5):
-    print "Please provide the following arguments: input directory, output directory, number of map threads and number of reduce threads."
-    print "Default arguments used: 'input_dir' 'output_dir' 4 4"
+  if (len(sys.argv) != 7):
+    # print "Please provide the following arguments: input directory, output directory, number of map threads and number of reduce threads."
+    print "Default arguments used: 'input_dir' 'output_dir' 4 4 mapreduce final"
     import settings
     input_dir, output_dir, n_mappers, n_reducers = settings.default_input_dir, settings.default_output_dir, settings.default_n_mappers, settings.default_n_reducers
+    mode = 'mapreduce'
+    final_flag = 'n'
   else:
       input_dir = sys.argv[1]
       output_dir = sys.argv[2]
       n_mappers = int(sys.argv[3])
       n_reducers = int(sys.argv[4])
+      mode = sys.argv[5]
+      final_flag = sys.argv[6]
+
   word_count = WordCount(input_dir, output_dir, n_mappers, n_reducers)
-  word_count.run()
-  result = (word for word in word_count.join_outputs())
-  print "-- Results of wordcount with parameters:", input_dir, output_dir, n_mappers, n_reducers
-  results_to_show = 50
-  print "-- Showing ", results_to_show," words:"
-  for i in range(results_to_show):
-    try:
-        word, count = result.next()
-        print word, count
-    except Exception:
-        pass
+  word_count.run(mode=mode)
+
+  if final_flag == 'final':
+    result = (word for word in word_count.join_outputs())
+    print "-- Results of wordcount with parameters:", input_dir, output_dir, n_mappers, n_reducers
+    results_to_show = 50
+    print "-- Showing ", results_to_show," words:"
+    for i in range(results_to_show):
+        try:
+            word, count = result.next()
+            print word, count
+        except Exception:
+            pass
+  else:
+    print "Non-final Map/Reduce Completed"
