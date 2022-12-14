@@ -1,4 +1,3 @@
-import time
 import os
 import json
 import settings
@@ -190,6 +189,7 @@ class MapReduce(object):
 
         :param index: the index of the thread to run on
         """
+        print "Inside run_reducer, index:",index
         key_values_map = {}
         for mapper_index in range(self.n_mappers):
             temp_map_file = open(settings.get_temp_map_file(mapper_index, index), "r")
@@ -212,32 +212,71 @@ class MapReduce(object):
         output_file.close()
 
 
-    def run(self, join=False):
-        """Executes the map and reduce operations
+    def mapper_mode(self):
 
-        :param join: True if we need to join the outputs, False by default.
-        """
         # initialize mappers list
         map_workers = []
-        # initialize reducers list
-        rdc_workers = []
+
         # run the map step
         for thread_id in range(self.n_mappers):
-            p = Process(target=self.run_mapper, args=(thread_id,))
-            # print "Starting a mapper in 5 seconds"
-            # time.sleep(5)
+            p = Process(target=self.run_mapper, args=(thread_id,))  
             p.start()
             map_workers.append(p)
         [t.join() for t in map_workers]
+
+    
+    def reducer_mode(self, join=False):
+
+        # initialize reducers list
+        rdc_workers = []
+
         # run the reduce step
         for thread_id in range(self.n_reducers):
+            print "Thread ID:",thread_id
             p = Process(target=self.run_reducer, args=(thread_id,))
             p.start()
             rdc_workers.append(p)
         [t.join() for t in rdc_workers]
         if join:
             self.join_outputs()
-        
+
+
+    def run(self, join=False, mode='mapreduce'):
+        """Executes the map and reduce operations
+
+        :param join: True if we need to join the outputs, False by default.
+        """
+
+        if 'map' in mode:
+            self.mapper_mode()
+        if 'reduce' in mode:
+
+            self.reducer_mode()
+
+        # # initialize mappers list
+        # map_workers = []
+        # # initialize reducers list
+        # rdc_workers = []
+
+        # # run the map step
+        # for thread_id in range(self.n_mappers):
+        #     p = Process(target=self.run_mapper, args=(thread_id,))
+        #     # pickle.dump(p, open("p1.p","wb"))   
+        #     # sdfsdf    
+        #     p.start()
+        #     map_workers.append(p)
+        # [t.join() for t in map_workers]
+
+        # # run the reduce step
+        # for thread_id in range(self.n_reducers):
+        #     p = Process(target=self.run_reducer, args=(thread_id,))
+        #     p.start()
+        #     rdc_workers.append(p)
+        # [t.join() for t in rdc_workers]
+        # if join:
+        #     self.join_outputs()
+
+
 
     def join_outputs(self, clean = True, sort = True, decreasing = True):
         """Join all the reduce output files into a single output file.
