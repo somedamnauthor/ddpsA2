@@ -21,6 +21,7 @@ class FileHandler(object):
         self.input_file_path = input_file_path
         self.output_dir = output_dir
 
+
     def initiate_file_split(self, split_index, index):
         """initialize a split file by opening and adding an index.
 
@@ -31,6 +32,7 @@ class FileHandler(object):
         file_split = open(settings.get_input_split_file(split_index-1), "w+")
         file_split.write(str(index) + "\n")
         return file_split
+
 
     def is_on_split_position(self, character, index, split_size, current_split):
         """Check if it is the right time to split.
@@ -43,6 +45,7 @@ class FileHandler(object):
 
         """
         return index>split_size*current_split+1 and character.isspace()
+
 
     def split_file(self, number_of_splits):
         """split a file into multiple files.
@@ -68,6 +71,7 @@ class FileHandler(object):
             index += 1
         current_split_unit.close()
         
+
     def join_files(self, number_of_files, clean = False, sort = True, decreasing = True):
         """join all the files in the output directory into a
         single output file.
@@ -97,6 +101,8 @@ class FileHandler(object):
         output_join_file.close()
         return output_join_list
     
+
+
 class MapReduce(object):
     """MapReduce class
     Note: mapper and reducer functions need to be implemented.
@@ -127,6 +133,7 @@ class MapReduce(object):
         self.file_handler = FileHandler(settings.get_input_file(self.input_dir), self.output_dir)
         self.file_handler.split_file(self.n_mappers)
 
+
     def mapper(self, key, value):
         """outputs a list of key-value pairs, where the key is
         potentially new and the values are of a potentially different type.
@@ -138,6 +145,7 @@ class MapReduce(object):
         """
         pass
 
+
     def reducer(self, key, values_list):
         """Outputs a single value together with the provided key.
         Note: this function is to be implemented.
@@ -148,11 +156,13 @@ class MapReduce(object):
         """
         pass
 
+
     def check_position(self, key, position):
         """Checks if we are on the right position
 
         """
         return position == (hash(key) % self.n_reducers)
+
 
     def run_mapper(self, index):
         """Runs the implemented mapper
@@ -173,11 +183,13 @@ class MapReduce(object):
                         , temp_map_file)
             temp_map_file.close()
         
+
     def run_reducer(self, index):
         """Runs the implemented reducer
 
         :param index: the index of the thread to run on
         """
+        print "Inside run_reducer, index:",index
         key_values_map = {}
         for mapper_index in range(self.n_mappers):
             temp_map_file = open(settings.get_temp_map_file(mapper_index, index), "r")
@@ -199,30 +211,73 @@ class MapReduce(object):
         json.dump(key_value_list, output_file)
         output_file.close()
 
-    def run(self, join=False):
+
+    def mapper_mode(self):
+
+        # initialize mappers list
+        map_workers = []
+
+        # run the map step
+        for thread_id in range(self.n_mappers):
+            p = Process(target=self.run_mapper, args=(thread_id,))  
+            p.start()
+            map_workers.append(p)
+        [t.join() for t in map_workers]
+
+    
+    def reducer_mode(self, join=False):
+
+        # initialize reducers list
+        rdc_workers = []
+
+        # run the reduce step
+        for thread_id in range(self.n_reducers):
+            print "Thread ID:",thread_id
+            p = Process(target=self.run_reducer, args=(thread_id,))
+            p.start()
+            rdc_workers.append(p)
+        [t.join() for t in rdc_workers]
+        if join:
+            self.join_outputs()
+
+
+    def run(self, join=False, mode='mapreduce'):
         """Executes the map and reduce operations
 
         :param join: True if we need to join the outputs, False by default.
         """
-        # initialize mappers list
-        map_workers = []
-        # initialize reducers list
-        rdc_workers = []
-        # run the map step
-        for thread_id in range(self.n_mappers):
-            p = Process(target=self.run_mapper, args=(thread_id,))
-            p.start()
-            map_workers.append(p)
-        [t.join() for t in map_workers]
-        # run the reduce step
-        for thread_id in range(self.n_reducers):
-            p = Process(target=self.run_reducer, args=(thread_id,))
-            p.start()
-            map_workers.append(p)
-        [t.join() for t in rdc_workers]
-        if join:
-            self.join_outputs()
-        
+
+        if 'map' in mode:
+            self.mapper_mode()
+        if 'reduce' in mode:
+
+            self.reducer_mode()
+
+        # # initialize mappers list
+        # map_workers = []
+        # # initialize reducers list
+        # rdc_workers = []
+
+        # # run the map step
+        # for thread_id in range(self.n_mappers):
+        #     p = Process(target=self.run_mapper, args=(thread_id,))
+        #     # pickle.dump(p, open("p1.p","wb"))   
+        #     # sdfsdf    
+        #     p.start()
+        #     map_workers.append(p)
+        # [t.join() for t in map_workers]
+
+        # # run the reduce step
+        # for thread_id in range(self.n_reducers):
+        #     p = Process(target=self.run_reducer, args=(thread_id,))
+        #     p.start()
+        #     rdc_workers.append(p)
+        # [t.join() for t in rdc_workers]
+        # if join:
+        #     self.join_outputs()
+
+
+
     def join_outputs(self, clean = True, sort = True, decreasing = True):
         """Join all the reduce output files into a single output file.
         

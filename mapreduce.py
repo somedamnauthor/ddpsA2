@@ -1,3 +1,5 @@
+#Single-threaded implementation
+
 import os
 import json
 import settings
@@ -225,18 +227,19 @@ class MapReduce(object):
         [t.join() for t in map_workers]
 
     
-    def reducer_mode(self, join=False):
+    def reducer_mode(self, join=False, thread_id=0):
 
         # initialize reducers list
         rdc_workers = []
 
         # run the reduce step
-        for thread_id in range(self.n_reducers):
-            print "Thread ID:",thread_id
-            p = Process(target=self.run_reducer, args=(thread_id,))
-            p.start()
-            rdc_workers.append(p)
+        # for thread_id in range(self.n_reducers):
+        print "Thread ID:",thread_id
+        p = Process(target=self.run_reducer, args=(thread_id,))
+        p.start()
+        rdc_workers.append(p)
         [t.join() for t in rdc_workers]
+
         if join:
             self.join_outputs()
 
@@ -250,8 +253,8 @@ class MapReduce(object):
         if 'map' in mode:
             self.mapper_mode()
         if 'reduce' in mode:
-
-            self.reducer_mode()
+            for i in range(self.n_reducers):
+                self.reducer_mode(thread_id=i)
 
         # # initialize mappers list
         # map_workers = []
