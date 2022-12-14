@@ -4,6 +4,7 @@ import sys
 print "Python Major Version",sys.version_info[0],"Minor Version",sys.version_info[1]
 
 class WordCount(MapReduce):
+
     def __init__(self, input_dir, output_dir, n_mappers, n_reducers):
         MapReduce.__init__(self,  input_dir, output_dir, n_mappers, n_reducers)
 
@@ -38,35 +39,28 @@ class WordCount(MapReduce):
 
 
 if __name__ == '__main__':
-  if (len(sys.argv) != 6):
-    # print "Please provide the following arguments: input directory, output directory, number of map threads and number of reduce threads."
-    print "Default arguments used: 'input_dir' 'output_dir' 4 4 mapreduce final 0"
-    import settings
-    input_dir, output_dir, n_mappers, n_reducers = settings.default_input_dir, settings.default_output_dir, settings.default_n_mappers, settings.default_n_reducers
-    mode = 'mapreduce'
-    final_flag = 'n'
-  else:
-      input_dir = 'input'
-      output_dir = 'output'
-      n_mappers = int(sys.argv[1])
-      n_reducers = int(sys.argv[2])
-      mode = sys.argv[3]
-      final_flag = sys.argv[4]
-      tid = sys.argv[5]
 
-  word_count = WordCount(input_dir, output_dir, n_mappers, n_reducers)
-  word_count.run(mode=mode, tid=tid)
+    input_dir = 'input'
+    output_dir = 'output'
+    n_mappers = int(sys.argv[1])
+    n_reducers = int(sys.argv[2])
+    mode = sys.argv[3]
+    final_flag = sys.argv[4]
+    tid = sys.argv[5]
 
-  if final_flag == 'final':
-    result = (word for word in word_count.join_outputs(final_flag=final_flag))
-    print "-- Results of wordcount with parameters:", input_dir, output_dir, n_mappers, n_reducers
-    results_to_show = 50
-    print "-- Showing ", results_to_show," words:"
-    for i in range(results_to_show):
-        try:
-            word, count = result.next()
-            print word, count
-        except Exception:
-            pass
-  else:
-    print "Non-final Map/Reduce Completed"
+    word_count = WordCount(input_dir, output_dir, n_mappers, n_reducers)
+    word_count.run(mode=mode, tid=tid)
+
+    if final_flag == 'final':
+        result = (word for word in word_count.join_outputs(final_flag=final_flag))
+        print "-- Results of wordcount with parameters:", input_dir, output_dir, n_mappers, n_reducers
+        results_to_show = 50
+        print "-- Showing ", results_to_show," words:"
+        for i in range(results_to_show):
+            try:
+                word, count = result.next()
+                print word, count
+            except Exception:
+                pass
+    else:
+        print "Non-final Map/Reduce Completed"
