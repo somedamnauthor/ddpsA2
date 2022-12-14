@@ -244,7 +244,7 @@ class MapReduce(object):
             self.join_outputs()
 
 
-    def run(self, join=False, mode='mapreduce'):
+    def run(self, join=False, mode='mapreduce', tid=0):
         """Executes the map and reduce operations
 
         :param join: True if we need to join the outputs, False by default.
@@ -253,8 +253,11 @@ class MapReduce(object):
         if 'map' in mode:
             self.mapper_mode()
         if 'reduce' in mode:
-            for i in range(self.n_reducers):
-                self.reducer_mode(thread_id=i)
+            if self.n_reducers > 1:
+                for i in range(self.n_reducers):
+                    self.reducer_mode(thread_id=i)
+            else:
+                self.reducer_mode(thread_id=tid)
 
         # # initialize mappers list
         # map_workers = []
@@ -281,7 +284,7 @@ class MapReduce(object):
 
 
 
-    def join_outputs(self, clean = True, sort = True, decreasing = True):
+    def join_outputs(self, clean = True, sort = True, decreasing = True, final_flag='n'):
         """Join all the reduce output files into a single output file.
         
         :param clean: if True the reduce outputs will be deleted, by default takes the value of self.clean
@@ -289,6 +292,10 @@ class MapReduce(object):
         :param decreasing: sort by decreasing order, high value to low value
         
         """
+        #TODO - Possibly better to take in a new parameter for number of files to reduce
+        if final_flag == 'final':
+            self.n_reducers = self.n_mappers
+
         try:
             return self.file_handler.join_files(self.n_reducers, clean, sort, decreasing)
         except Exception, e:
