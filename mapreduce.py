@@ -1,39 +1,28 @@
-#Single-threaded implementation
+# Single-threaded (serial) implementation with support for distribution
 
 import os
 import json
 import settings
 from multiprocessing import Process
 
-
-class FileHandler(object):
-    """FileHandler class
-    Manages splitting input files and joining outputs together.
+# This class handles file operations - These include splitting and joining files for mapping and reducing respectively
+class FileOps(object):
     
-    """
-    def __init__(self, input_file_path, output_dir):
+    def __init__(self, input_path='input', output_path='output'):
         """
-        Note: the input file path should be given for splitting.
-        The output directory is needed for joining the outputs.
-
-        :param input_file_path: input file path
-        :param output_dir: output directory path
-
+        Constructor to initialize input and output filepaths.
+        These have been currently hardcoded, therefore: 
+        - They need to be on the same level as the current mapreduce.py file
+        - They need to be called 'inputFiles' and 'outputFiles' respectively
         """
-        self.input_file_path = input_file_path
-        self.output_dir = output_dir
+        self.input_file_path = input_path
+        self.output_dir = output_path
 
-
-    def initiate_file_split(self, split_index, index):
-        """initialize a split file by opening and adding an index.
-
-        :param split_index: the split index we are currently on, to be used for naming the file.
-        :param index: the index given to the file.
-
-        """
-        file_split = open(settings.get_input_split_file(split_index-1), "w+")
-        file_split.write(str(index) + "\n")
-        return file_split
+    # This function splits the file by first inserting an index in the beginning of the file
+    def create_indexed_file(self, file_split_point, index):
+        split = open(settings.get_input_split_file(file_split_point-1), "w+")
+        split.write(str(index) + "\n")
+        return split
 
 
     def is_on_split_position(self, character, index, split_size, current_split):
@@ -63,13 +52,13 @@ class FileHandler(object):
         file_content = original_file.read()
         original_file.close()
         (index, current_split_index) = (1, 1)
-        current_split_unit = self.initiate_file_split(current_split_index, index)
+        current_split_unit = self.create_indexed_file(current_split_index, index)
         for character in file_content:
             current_split_unit.write(character)
             if self.is_on_split_position(character, index, unit_size, current_split_index):
                 current_split_unit.close()
                 current_split_index += 1
-                current_split_unit = self.initiate_file_split(current_split_index, index)
+                current_split_unit = self.create_indexed_file(current_split_index, index)
             index += 1
         current_split_unit.close()
         
@@ -111,8 +100,8 @@ class MapReduce(object):
     
     """
 
-    def __init__(self, input_dir = settings.default_input_dir, output_dir = settings.default_output_dir,
-                 n_mappers = settings.default_n_mappers, n_reducers = settings.default_n_reducers,
+    def __init__(self, input_dir = 'input', output_dir = 'output',
+                 n_mappers = 4, n_reducers = 4,
                  clean = True):
         """
 
@@ -132,7 +121,7 @@ class MapReduce(object):
         self.n_mappers = n_mappers
         self.n_reducers = n_reducers
         self.clean = clean
-        self.file_handler = FileHandler(settings.get_input_file(self.input_dir), self.output_dir)
+        self.file_handler = FileOps(settings.get_input_file(self.input_dir), self.output_dir)
         self.file_handler.split_file(self.n_mappers)
 
 

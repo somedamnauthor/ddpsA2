@@ -38,7 +38,7 @@ class WordCount(MapReduce):
 
 
 if __name__ == '__main__':
-  if (len(sys.argv) != 8):
+  if (len(sys.argv) != 6):
     # print "Please provide the following arguments: input directory, output directory, number of map threads and number of reduce threads."
     print "Default arguments used: 'input_dir' 'output_dir' 4 4 mapreduce final 0"
     import settings
@@ -46,13 +46,13 @@ if __name__ == '__main__':
     mode = 'mapreduce'
     final_flag = 'n'
   else:
-      input_dir = sys.argv[1]
-      output_dir = sys.argv[2]
-      n_mappers = int(sys.argv[3])
-      n_reducers = int(sys.argv[4])
-      mode = sys.argv[5]
-      final_flag = sys.argv[6]
-      tid = sys.argv[7]
+      input_dir = 'input'
+      output_dir = 'output'
+      n_mappers = int(sys.argv[1])
+      n_reducers = int(sys.argv[2])
+      mode = sys.argv[3]
+      final_flag = sys.argv[4]
+      tid = sys.argv[5]
 
   word_count = WordCount(input_dir, output_dir, n_mappers, n_reducers)
   word_count.run(mode=mode, tid=tid)
