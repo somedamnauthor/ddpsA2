@@ -1,18 +1,28 @@
+print "Python Major Version",sys.version_info[0],"Minor Version",sys.version_info[1]
+
 from mapreduce import MapReduce
 import sys
 
-print "Python Major Version",sys.version_info[0],"Minor Version",sys.version_info[1]
-
+# The WordCount class inherits off the MapReduce class and implements/overrides the mapper and reducer functions
 class WordCount(MapReduce):
 
+    # Initialize/Instantiate the attributes using the base class
     def __init__(self, input_dir, output_dir, n_mappers, n_reducers):
         MapReduce.__init__(self,  input_dir, output_dir, n_mappers, n_reducers)
 
+    # Implement the mapper
     def mapper(self, key, value):
-        """Map function for the word count example
-        Note: Each line needs to be separated into words, and each word
-        needs to be converted to lower case.
+
         """
+        Function that implements the mapper and overrides the corresponding MapReduce class method 
+
+        Input - 
+        key, value: Value stores the line, the keys are words and the values then become the count
+
+        Output - 
+        results: list containing key-value pairs where the key is word and value is count
+        """
+
         results = []
         default_count = 1
         # seperate line into words
