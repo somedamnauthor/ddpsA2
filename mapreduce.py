@@ -1,5 +1,6 @@
 # Single-threaded (serial) implementation with support for distribution
 import fileNameRetriever
+from operator import itemgetter as o
 from multiprocessing import Process
 import os
 import json
@@ -17,6 +18,7 @@ class FileOps(object):
         - They need to be called 'input' and 'output' respectively
         """
 
+        # oth the input and output paths are hardcoded to 'input' and 'output'
         self.input_file_path = input_path
         self.output_dir = output_path
 
@@ -34,13 +36,16 @@ class FileOps(object):
         - split: This is the split file created from the given split point and created with the given index
         """
 
+        # open the file at the given split point
         split = open(fileNameRetriever.get_input_split_file(file_split_point-1), "w+")
+
+        # write new file with the index in the beginning of the file
         split.write(str(index) + "\n")
 
         return split
 
 
-    def check_split(self, check_char, split_index, size, split_number):
+    def validate_split(self, check_char, split_index, size, split_number):
 
         """
         Function to check if the split is happening in the right place, i.e: 
@@ -58,261 +63,359 @@ class FileOps(object):
 
         """
 
+        # check if the split is happening at the right index and check if the index is on a space character
         if split_index > size*split_number+1 and check_char.isspace():
             return True
         else:
             return False
 
 
-    def split_file(self, number_of_splits):
-        """split a file into multiple files.
-        note: this has not been optimized to avoid overhead.
-
-        :param number_of_splits: the number of chunks to
-        split the file into.
+    def split_controller(self, num_chunks):
 
         """
-        file_size = os.path.getsize(self.input_file_path)
-        unit_size = file_size / number_of_splits + 1
-        original_file = open(self.input_file_path, "r")
-        file_content = original_file.read()
-        original_file.close()
-        (index, current_split_index) = (1, 1)
-        current_split_unit = self.create_indexed_file(current_split_index, index)
-        for character in file_content:
-            current_split_unit.write(character)
-            if self.check_split(character, index, unit_size, current_split_index):
-                current_split_unit.close()
-                current_split_index += 1
-                current_split_unit = self.create_indexed_file(current_split_index, index)
-            index += 1
-        current_split_unit.close()
+        Master function to carry out the file split by invoking the create_indexed_file() and check_split() methods
+
+        Input:
+        nums_split: Number of files to split the current file into. This is set to the number of mappers specified by the user
+        """
+        
+        # Get file and unit size size - unit size is needed for checking the split validity
+        original_size = os.path.getsize(self.input_file_path)
+        chunk_size = (original_size / num_chunks) + 1
+
+        # Read the file contents and store in memory
+        file = open(self.input_file_path, "r")
+        original_content = file.read()
+        file.close()
+
+        # Initialize index and current split - both needed for checking split validity
+        # (index, current_split_index) = (1, 1)
+        intended_index = 1
+        chunk_index = 1
+
+        # initialize the split at the required index
+        chunk = self.create_indexed_file(1,1)
+
+        # Create the split
+        # Traverse the file contents character by character 
+        # (TODO - This is not ideal)
+        for token in original_content:
+
+            chunk.write(token)
+
+            # Check if the split can happen after the current character
+            if self.validate_split(token, intended_index, chunk_size, chunk_index):
+
+                #Split can happen - Create the indexed file here and close
+                chunk.close()
+                chunk_index += 1
+                chunk = self.create_indexed_file(chunk_index, intended_index)
+
+            #Split cannot happen - move onto the next index
+            intended_index += 1
+        
+        # File has been split, close the created file
+        chunk.close()
         
 
-    def join_files(self, number_of_files, clean = False, sort = True, decreasing = True):
-        """join all the files in the output directory into a
-        single output file.
-
-        :param number_of_files: total number of files.
-        :param clean: if True the reduce outputs will be deleted,
-        by default takes the value of self.clean.
-        :param sort: sort the outputs.
-        :param decreasing: sort by decreasing order, high value
-        to low value.
-
-        :return output_join_list: a list of the outputs
+    def consolidate_chunks(self, num_chunks):
+        
         """
-        output_join_list = []
-        for reducer_index in xrange(0, number_of_files):
-            f = open(fileNameRetriever.get_output_file(reducer_index), "r")
-            output_join_list += json.load(f)
+        Function to consolidate all the output chunks into a single file
+
+        Input - 
+        num_chunks: Number of chunks to consolidate
+        
+        Output - 
+        final_list: Sorted list containing all words and their counts
+        """
+
+        # Initialize list that holds the final output
+        final_list = []
+
+        # Traverse through bunch of chunks
+        for chunk_number in range(0, num_chunks):
+
+            # open chunk
+            f = open(fileNameRetriever.get_output_file(chunk_number), "r")
+
+            # append to list and close
+            final_list += json.load(f)
             f.close()
-            if clean:
-                os.unlink(fileNameRetriever.get_output_file(reducer_index))
-        if sort:
-            from operator import itemgetter as operator_ig
-            # sort using the key
-            output_join_list.sort(key=operator_ig(1), reverse=decreasing)
+
+            # Remove chunks once done
+            os.unlink(fileNameRetriever.get_output_file(chunk_number))
+
+        # Sort the final list in descending order of maximum count
+        final_list.sort(key=o(1), reverse=True)
+
+        # Create a final output file to store the result 
         output_join_file = open(fileNameRetriever.get_output_join_file(self.output_dir), "w+")
-        json.dump(output_join_list, output_join_file)
+
+        # Populate file with the list we've created
+        json.dump(final_list, output_join_file)
         output_join_file.close()
-        return output_join_list
+
+        # Return list contents, used later to print to stdout
+        return final_list
     
 
-
+# Class containing the functions that implement the MapReduce system
+# The map and reduce methods are virtual and are to be overridden by any program that uses the system 
 class MapReduce(object):
-    """MapReduce class
-    Note: mapper and reducer functions need to be implemented.
-    
-    """
 
-    def __init__(self, input_dir = 'input', output_dir = 'output',
-                 n_mappers = 4, n_reducers = 4,
-                 clean = True):
+    def __init__(self, input_path = 'input', output_path = 'output', num_of_chunks = 4, num_of_reducers = 4):
+        
+        """
+        Constructor to initialize directories and user inputs/options
         """
 
-        :param input_dir: directory of the input files,
-        taken from the default settings if not provided
-        :param output_dir: directory of the output files,
-        taken from the default settings if not provided
-        :param n_mappers: number of mapper threads to use,
-        taken from the default settings if not provided
-        :param n_reducers: number of reducer threads to use,
-        taken from the default settings if not provided
-        :param clean: optional, if True temporary files are
-        deleted, True by default.
-        """
-        self.input_dir = input_dir
-        self.output_dir = output_dir
-        self.n_mappers = n_mappers
-        self.n_reducers = n_reducers
-        self.clean = clean
-        self.file_handler = FileOps(fileNameRetriever.get_input_file(self.input_dir), self.output_dir)
-        self.file_handler.split_file(self.n_mappers)
+        self.input_path = input_path
+        self.output_path = output_path
+        self.num_of_mappers = num_of_chunks
+        self.num_of_reducers = num_of_reducers
+        self.fileOps = FileOps(fileNameRetriever.get_input_file(self.input_path), self.output_path)
+        self.fileOps.split_controller(self.num_of_mappers)
 
+
+    # Mapper and reducer virtual functions are given below
+    # Mapper takes in information in a key and value pair - for example key is line and value is word
+    # Reducer takes in the key and the index it should reduce at
+    # Both these functions are to be overridden
 
     def mapper(self, key, value):
-        """outputs a list of key-value pairs, where the key is
-        potentially new and the values are of a potentially different type.
-        Note: this function is to be implemented.
+        pass
 
-        :param key: key of the current mapper
-        :param value: value for the corresponding key
-        note: this method should be implemented
-        """
+    def reducer(self, key, values):
         pass
 
 
-    def reducer(self, key, values_list):
-        """Outputs a single value together with the provided key.
-        Note: this function is to be implemented.
-
-        :param key: key of the reducer
-        :param value_list: list of values for the key
-        note: this method should be implemented
+    def validate_pos(self, key, position):
+        
         """
-        pass
+        Function to check if the mapper is splitting the file positions correctly for the reducer
+        Invoked by run_mapper
 
+        Inputs - 
+        key: Key for the mapping
+        position: intended position for the reduction
 
-    def check_position(self, key, position):
-        """Checks if we are on the right position
-
+        Output - 
+        Boolean True/False to check if the position valid
         """
-        return position == (hash(key) % self.n_reducers)
+
+        # Check if position is 
+        if position == (hash(key) % self.num_of_reducers):
+            return True
+        
+        else:
+            return False
 
 
-    def run_mapper(self, index):
-        """Runs the implemented mapper
 
-        :param index: the index of the thread to run on
+    def mapper_controller(self, file_index):
+        
         """
-        input_split_file = open(fileNameRetriever.get_input_split_file(index), "r")
-        key = input_split_file.readline()
-        value = input_split_file.read()
-        input_split_file.close()
-        if(self.clean):
-            os.unlink(fileNameRetriever.get_input_split_file(index))
+        Master function that executes the mapper code by first creating key,value pairs
+
+        Input - 
+        file_index: number/identifier for the file which is being split
+        """
+        
+        # Get the contents of the input file
+        input_chunk = open(fileNameRetriever.get_input_split_file(file_index), "r")
+
+        # Get a single line (the index on top of the chunk) and store it as key
+        key = input_chunk.readline()
+
+        # Get the entire chunk's content as the value, close and delete the chunk file
+        value = input_chunk.read()
+        input_chunk.close()
+        os.unlink(fileNameRetriever.get_input_split_file(file_index))
+
+        # Call the mapper and store the result, for example the word counts into a variable
         mapper_result = self.mapper(key, value)
-        for reducer_index in range(self.n_reducers):
-            temp_map_file = open(fileNameRetriever.get_temp_map_file(index, reducer_index), "w+")
-            json.dump([(key, value) for (key, value) in mapper_result 
-                                        if self.check_position(key, reducer_index)]
-                        , temp_map_file)
-            temp_map_file.close()
+
+        # Create files containing the outputs for the reducers to later work on
+        for reducer_num in range(self.num_of_reducers):
+
+            # Open a temp file
+            map_intermediate = open(fileNameRetriever.get_temp_map_file(file_index, reducer_num), "w+")
+
+            # Create a list containing the keys and values to be written out to temp file
+            out = [(key, value) for (key, value) in mapper_result if self.validate_pos(key, reducer_num)]
+
+            # Populate the temp file with the list of keys and values grabbed from the mapper
+            json.dump(out, map_intermediate)
+            map_intermediate.close()
         
 
-    def run_reducer(self, index):
-        """Runs the implemented reducer
+    def reducer_controller(self, index):
 
-        :param index: the index of the thread to run on
         """
+        Master function that runs the reducer method by first preparing the input chunk
+        Invoked by mapper_mode()
+
+        Input - 
+        index: The index of the file being reduced
+        """
+
         print "Inside run_reducer, index:",index
-        key_values_map = {}
-        for mapper_index in range(self.n_mappers):
-            temp_map_file = open(fileNameRetriever.get_temp_map_file(mapper_index, index), "r")
-            mapper_results = json.load(temp_map_file)
-            for (key, value) in mapper_results:
-                if not(key in key_values_map):
-                    key_values_map[key] = []
+
+        # Dictionary that will eventually contain all keys and values
+        kv_dict = {}
+
+        # Iterate through the required number of mappers/splits
+        for i in range(self.num_of_mappers):
+
+            # Read the contents of each intermediate map file onto a variable
+            map_intermediate = open(fileNameRetriever.get_temp_map_file(i, index), "r")
+
+            # Convert the contents to JSON for ease of processsing
+            map = json.load(map_intermediate)
+
+            # Populate the dictionary
+            for (key, value) in map:
+
+                # Check for key not existing and create an empty corresponding value
+                if not(key in kv_dict):
+                    kv_dict[key] = []
+
+                # Populate the required value
                 try:
-                    key_values_map[key].append(value)
+                    kv_dict[key].append(value)
                 except Exception, e:
-                    print "Exception while inserting key: "+str(e)
-            temp_map_file.close()
-            if self.clean:
-                os.unlink(fileNameRetriever.get_temp_map_file(mapper_index, index))
-        key_value_list = []
-        for key in key_values_map:
-            key_value_list.append(self.reducer(key, key_values_map[key]))
+                    print "cannot retrieve key"
+
+            # Close intermediate file as it's not needed anymore, we have the populated dictionary
+            map_intermediate.close()
+
+            # Delete the intermediate file
+            os.unlink(fileNameRetriever.get_temp_map_file(i, index))
+        
+        # Input the dictionary into the reducer and store the outputs onto a list
+        kv_list = []
+        for key in kv_dict:
+            kv_list.append(self.reducer(key, kv_dict[key]))
+
+        # Create an output file for the current reducer
         output_file = open(fileNameRetriever.get_output_file(index), "w+")
-        json.dump(key_value_list, output_file)
+
+        # Populate output file with list and close the former
+        json.dump(kv_list, output_file)
         output_file.close()
 
 
     def mapper_mode(self):
 
-        # initialize mappers list
-        map_workers = []
+        """
+        Function that invokes the mapper controller to create mappers for the required number of splits
+        Invoked in run()
+        """
 
-        # run the map step
-        for thread_id in range(self.n_mappers):
-            p = Process(target=self.run_mapper, args=(thread_id,))  
+        # initialize mappers list
+        mapper_list = []
+
+        # Iterate for the given number of mappers
+        for tid in range(self.num_of_mappers):
+
+            # Create a mapper process
+            p = Process(target=self.mapper_controller, args=(tid,))  
+
+            # This kicks off the mapper
             p.start()
-            map_workers.append(p)
-        [t.join() for t in map_workers]
+
+            # Store the process in the list, since the processes need to be joined later
+            mapper_list.append(p)
+
+        # Call the in-built join() method on all the mapper processes
+        [t.join() for t in mapper_list]
 
     
     def reducer_mode(self, join=False, thread_id=0):
 
+        """
+        Invoked in run()
+        Function that invokes the reducer controller to create ONE reducer for one split
+        This is different to the mapper_mode() method, where all mappers are invoked from the mapper_mode()
+        In this case, we reduce only a single chunk. This is because we intend to invoke this method from various systems
+        Eah system/node can run multiple reducer processes, but they will be from different instantiations
+
+        Input - 
+        join: Boolean flag to signify whether the outputs of the current and all previous reducers needs to be composited
+        thread_id: Executes the reducer for the given thread_id. Separate instances execute separate threads
+        """
+
         # initialize reducers list
-        rdc_workers = []
+        # TODO - remove list usage
+        reducer_list = []
 
-        # run the reduce step
-        # for thread_id in range(self.n_reducers):
         print "Thread ID:",thread_id
-        p = Process(target=self.run_reducer, args=(thread_id,))
-        p.start()
-        rdc_workers.append(p)
-        [t.join() for t in rdc_workers]
 
+        # Create the reduce process
+        p = Process(target=self.reducer_controller, args=(thread_id,))
+
+        # Kick off the reduction
+        p.start()
+
+        # Add reducer to reducer list
+        # TODO - Avoid this
+        reducer_list.append(p)
+
+        # Join the reducer process to close it off
+        [t.join() for t in reducer_list]
+
+        # Only invoke join_outputs() for the very final reduction, where the outputs of each reducer needs to be composited
         if join:
             self.join_outputs()
 
 
-    def run(self, join=False, mode='mapreduce', tid=0):
-        """Executes the map and reduce operations
+    def execute_mapreduce(self, join=False, mode='mapreduce', tid=0):
+        
+        """
+        Master function to run the map and reduce operations - invokes mapper_mode() and reducer_mode()
 
-        :param join: True if we need to join the outputs, False by default.
+        Inputs - 
+        join: Boolean flag to signify whether the outputs of the current and all previous reducers needs to be composited
+        mode: String that will control whether the maps, reduce, or both are executed. In the current distributed implementation it is only supposed to be one of the two at once, i.e either 'map' or 'reduce'
+        tid: Thread ID for which the reduce is supposed to be run
         """
 
+        # Check if maps are to be run
         if 'map' in mode:
             self.mapper_mode()
+
+        # Check if reduce is to be run 
         if 'reduce' in mode:
-            if self.n_reducers > 1:
-                for i in range(self.n_reducers):
+
+            # In the case of the non-distributed implementation we run multiple reducers off the same program on a single system
+            if self.num_of_reducers > 1:
+                for i in range(self.num_of_reducers):
                     self.reducer_mode(thread_id=i)
+
+            # In the case of the distributed implementation we run only a single reducer for a single thread ID
             else:
                 self.reducer_mode(thread_id=tid)
 
-        # # initialize mappers list
-        # map_workers = []
-        # # initialize reducers list
-        # rdc_workers = []
 
-        # # run the map step
-        # for thread_id in range(self.n_mappers):
-        #     p = Process(target=self.run_mapper, args=(thread_id,))
-        #     # pickle.dump(p, open("p1.p","wb"))   
-        #     # sdfsdf    
-        #     p.start()
-        #     map_workers.append(p)
-        # [t.join() for t in map_workers]
-
-        # # run the reduce step
-        # for thread_id in range(self.n_reducers):
-        #     p = Process(target=self.run_reducer, args=(thread_id,))
-        #     p.start()
-        #     rdc_workers.append(p)
-        # [t.join() for t in rdc_workers]
-        # if join:
-        #     self.join_outputs()
-
-
-
-    def join_outputs(self, clean = True, sort = True, decreasing = True, final_flag='n'):
-        """Join all the reduce output files into a single output file.
-        
-        :param clean: if True the reduce outputs will be deleted, by default takes the value of self.clean
-        :param sort: sort the outputs
-        :param decreasing: sort by decreasing order, high value to low value
+    def join_outputs(self, final_flag='n'):
         
         """
-        #TODO - Possibly better to take in a new parameter for number of files to reduce
-        if final_flag == 'final':
-            self.n_reducers = self.n_mappers
+        Function to composite all outputs into a single output file. This is to be invoked by the reducer_mode() method when the final reducer is being run
+        
+        Input - 
+        final_flag: This signifies that the operation is a reduce and the reduce in question is the final reduce operation, thus the join should indeed go through
+        """
 
+        # TODO - Possibly better to take in a new parameter for number of files to reduce
+        # Currently we decide that, if we need to reduce, the number of files to reduce is same as the number of files to map
+        # !!!!WARNING - HIGHLY DELICATE and NON-IDEAL!!!!
+        if final_flag == 'final':
+            self.num_of_reducers = self.num_of_mappers
+
+        # Run the consolidation
         try:
-            return self.file_handler.join_files(self.n_reducers, clean, sort, decreasing)
+            return self.fileOps.consolidate_chunks(self.num_of_reducers)
         except Exception, e:
-            print "Exception occured while joining: maybe the join has been performed already  -- "+str(e)
+            print "Could not perform current join"
             return []

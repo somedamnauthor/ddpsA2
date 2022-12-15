@@ -49,7 +49,7 @@ if __name__ == '__main__':
     tid = sys.argv[5]
 
     word_count = WordCount(input_dir, output_dir, n_mappers, n_reducers)
-    word_count.run(mode=mode, tid=tid)
+    word_count.execute_mapreduce(mode=mode, tid=tid)
 
     if final_flag == 'final':
         result = (word for word in word_count.join_outputs(final_flag=final_flag))

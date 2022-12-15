@@ -52,7 +52,7 @@ if __name__ == '__main__':
       n_mappers = int(sys.argv[3])
       n_reducers = int(sys.argv[4])
   word_count = WordCount(input_dir, output_dir, n_mappers, n_reducers)
-  word_count.run()
+  word_count.execute_mapreduce()
   result = (word for word in word_count.join_outputs())
   print "-- Results of wordcount with parameters:", input_dir, output_dir, n_mappers, n_reducers
   results_to_show = 50
