@@ -1,7 +1,7 @@
-print "Python Major Version",sys.version_info[0],"Minor Version",sys.version_info[1]
-
-from mapreduce import MapReduce
 import sys
+from mapreduce import MapReduce
+
+print "Python Major Version",sys.version_info[0],"Minor Version",sys.version_info[1]
 
 # The WordCount class inherits off the MapReduce class and implements/overrides the mapper and reducer functions
 class WordCount(MapReduce):
