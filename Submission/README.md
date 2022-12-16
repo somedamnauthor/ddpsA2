@@ -3,9 +3,11 @@
 ### Usage
 
 <ul>
-<li>Place the data/intended input files in the input/data directory
+<li>Place the data/intended input files in the ```input/data``` directory
 <li>The experiments use the erwik9 dataset. This can be obtained using: 
+```
 wget http://mattmahoney.net/dc/enwik9.zip
+```
 <li>Details on the dataset can be found here - http://mattmahoney.net/dc/textdata.html
 
 
