@@ -37,7 +37,7 @@ class FileOps(object):
         """
 
         # open the file at the given split point
-        split = open(fileNameRetriever.get_input_split_file(file_split_point-1), "w+")
+        split = open(fileNameRetriever.get_split_filename(file_split_point-1), "w+")
 
         # write new file with the index in the beginning of the file
         split.write(str(index) + "\n")
@@ -137,20 +137,20 @@ class FileOps(object):
         for chunk_number in range(0, num_chunks):
 
             # open chunk
-            f = open(fileNameRetriever.get_output_file(chunk_number), "r")
+            f = open(fileNameRetriever.get_reduce_filename(chunk_number), "r")
 
             # append to list and close
             final_list += json.load(f)
             f.close()
 
             # Remove chunks once done
-            os.unlink(fileNameRetriever.get_output_file(chunk_number))
+            os.unlink(fileNameRetriever.get_reduce_filename(chunk_number))
 
         # Sort the final list in descending order of maximum count
         final_list.sort(key=o(1), reverse=True)
 
         # Create a final output file to store the result 
-        output_join_file = open(fileNameRetriever.get_output_join_file(self.output_dir), "w+")
+        output_join_file = open(fileNameRetriever.get_output_filename(self.output_dir), "w+")
 
         # Populate file with the list we've created
         json.dump(final_list, output_join_file)
@@ -174,7 +174,7 @@ class MapReduce(object):
         self.output_path = output_path
         self.num_of_mappers = num_of_chunks
         self.num_of_reducers = num_of_reducers
-        self.fileOps = FileOps(fileNameRetriever.get_input_file(self.input_path), self.output_path)
+        self.fileOps = FileOps(fileNameRetriever.get_filename(self.input_path), self.output_path)
         self.fileOps.split_controller(self.num_of_mappers)
 
 
@@ -223,7 +223,7 @@ class MapReduce(object):
         """
         
         # Get the contents of the input file
-        input_chunk = open(fileNameRetriever.get_input_split_file(file_index), "r")
+        input_chunk = open(fileNameRetriever.get_split_filename(file_index), "r")
 
         # Get a single line (the index on top of the chunk) and store it as key
         key = input_chunk.readline()
@@ -231,7 +231,7 @@ class MapReduce(object):
         # Get the entire chunk's content as the value, close and delete the chunk file
         value = input_chunk.read()
         input_chunk.close()
-        os.unlink(fileNameRetriever.get_input_split_file(file_index))
+        os.unlink(fileNameRetriever.get_split_filename(file_index))
 
         # Call the mapper and store the result, for example the word counts into a variable
         mapper_result = self.mapper(key, value)
@@ -240,7 +240,7 @@ class MapReduce(object):
         for reducer_num in range(self.num_of_reducers):
 
             # Open a temp file
-            map_intermediate = open(fileNameRetriever.get_temp_map_file(file_index, reducer_num), "w+")
+            map_intermediate = open(fileNameRetriever.get_intermediate_file(file_index, reducer_num), "w+")
 
             # Create a list containing the keys and values to be written out to temp file
             out = [(key, value) for (key, value) in mapper_result if self.validate_pos(key, reducer_num)]
@@ -254,7 +254,7 @@ class MapReduce(object):
 
         """
         Master function that runs the reducer method by first preparing the input chunk
-        Invoked by mapper_mode()
+        Invoked by reducer_mode()
 
         Input - 
         index: The index of the file being reduced
@@ -269,7 +269,7 @@ class MapReduce(object):
         for i in range(self.num_of_mappers):
 
             # Read the contents of each intermediate map file onto a variable
-            map_intermediate = open(fileNameRetriever.get_temp_map_file(i, index), "r")
+            map_intermediate = open(fileNameRetriever.get_intermediate_file(i, index), "r")
 
             # Convert the contents to JSON for ease of processsing
             map = json.load(map_intermediate)
@@ -291,7 +291,7 @@ class MapReduce(object):
             map_intermediate.close()
 
             # Delete the intermediate file
-            os.unlink(fileNameRetriever.get_temp_map_file(i, index))
+            os.unlink(fileNameRetriever.get_intermediate_file(i, index))
         
         # Input the dictionary into the reducer and store the outputs onto a list
         kv_list = []
@@ -299,7 +299,7 @@ class MapReduce(object):
             kv_list.append(self.reducer(key, kv_dict[key]))
 
         # Create an output file for the current reducer
-        output_file = open(fileNameRetriever.get_output_file(index), "w+")
+        output_file = open(fileNameRetriever.get_reduce_filename(index), "w+")
 
         # Populate output file with list and close the former
         json.dump(kv_list, output_file)
@@ -310,7 +310,7 @@ class MapReduce(object):
 
         """
         Function that invokes the mapper controller to create mappers for the required number of splits
-        Invoked in run()
+        Invoked in execute_mapper()
         """
 
         # initialize mappers list
@@ -335,7 +335,7 @@ class MapReduce(object):
     def reducer_mode(self, join=False, thread_id=0):
 
         """
-        Invoked in run()
+        Invoked in execute_mapreduce()
         Function that invokes the reducer controller to create ONE reducer for one split
         This is different to the mapper_mode() method, where all mappers are invoked from the mapper_mode()
         In this case, we reduce only a single chunk. This is because we intend to invoke this method from various systems
